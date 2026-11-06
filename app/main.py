@@ -28,6 +28,7 @@ from app.gcp_tools import (
     describe_gce_reservation,
     design_and_validate_reservation,
     execute_staged_action,
+    list_authorized_projects,
     list_gce_reservations,
     normalize_user_email,
 )
@@ -57,6 +58,10 @@ class ChatRequest(BaseModel):
     user_email: Optional[str] = Field(
         default=None,
         description="Caller email identity (only admin@merdogdu.altostrat.com is authorized to provision reservations)",
+    )
+    project_id: Optional[str] = Field(
+        default=None,
+        description="Currently selected GCP project ID from the UI dropdown",
     )
 
 
@@ -126,6 +131,11 @@ async def get_agent_spec() -> Dict[str, Any]:
     }
 
 
+@app.get("/api/projects")
+async def list_projects_endpoint() -> Dict[str, Any]:
+    return list_authorized_projects()
+
+
 @app.post("/api/chat")
 async def chat_endpoint(req: ChatRequest, request: Request) -> Dict[str, Any]:
     try:
@@ -134,6 +144,7 @@ async def chat_endpoint(req: ChatRequest, request: Request) -> Dict[str, Any]:
             user_message=req.message,
             session_id=req.session_id,
             user_email=caller_email,
+            project_id=req.project_id,
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

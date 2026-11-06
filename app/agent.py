@@ -20,6 +20,7 @@ from app.gcp_tools import (
     describe_gce_reservation,
     design_and_validate_reservation,
     execute_staged_action,
+    list_authorized_projects,
     list_gce_reservations,
     normalize_user_email,
     stage_reservation_mutation,
@@ -29,7 +30,10 @@ MODEL_ID = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
 AGENT_MD_PATH = Path(__file__).resolve().parent.parent / "gce-reservation-agent.md"
 
 
-def load_system_instruction(caller_email: Optional[str] = None) -> str:
+def load_system_instruction(
+    caller_email: Optional[str] = None,
+    active_project_id: Optional[str] = None,
+) -> str:
     """Loads the system instruction directly from gce-reservation-agent.md."""
     raw = AGENT_MD_PATH.read_text(encoding="utf-8")
     # Strip YAML frontmatter if present
@@ -40,17 +44,19 @@ def load_system_instruction(caller_email: Optional[str] = None) -> str:
 
     normalized_caller = normalize_user_email(caller_email) or "unauthenticated/unknown"
     is_authorized = normalized_caller == AUTHORIZED_RESERVATION_ADMIN
+    selected_project = (active_project_id or DEFAULT_PROJECT_ID).strip()
 
     runtime_context = f"""
 
 # Deployed Runtime Context & Available Tools
-* **Default Active GCP Project**: `{DEFAULT_PROJECT_ID}` (unless the user specifies another `owner_project_id`).
+* **Currently Selected GCP Project in UI**: `{selected_project}` (Default to `{selected_project}` as the `owner_project_id` unless the user specifies another project).
 * **Current Authenticated Caller Email**: `{normalized_caller}` (Authorized to provision/modify reservations: `{is_authorized}`).
 * **Strict RBAC Authorization Policy**:
   - ONLY `{AUTHORIZED_RESERVATION_ADMIN}` is allowed to create, stage, resize, or delete reservations for this application.
   - If the current caller (`{normalized_caller}`) is NOT `{AUTHORIZED_RESERVATION_ADMIN}` and asks to create, stage, resize, or delete a reservation, immediately reject the request with:
     `"Access Denied: You ({normalized_caller}) have no rights to make or modify a reservation for this app. Only {AUTHORIZED_RESERVATION_ADMIN} is authorized."`
 * **Live GCP Read-Only Tools (Safe to call automatically without asking)**:
+  - `list_authorized_projects`: List all active GCP projects that the account is authorized to access.
   - `list_gce_reservations`: List live GCE reservations in a project/zone.
   - `describe_gce_reservation`: Inspect a specific live GCE reservation.
   - `check_region_quotas`: Inspect live GCE regional quotas (CPUs, E2/N2/C3 CPUs, GPUs, Local SSDs) in the target region.
@@ -77,6 +83,14 @@ SESSION_HISTORIES: Dict[str, List[types.Content]] = {}
 
 
 TOOL_DECLARATIONS = [
+    types.FunctionDeclaration(
+        name="list_authorized_projects",
+        description="Read-only: Lists all active GCP projects that the account is authorized to access.",
+        parameters_json_schema={
+            "type": "object",
+            "properties": {},
+        },
+    ),
     types.FunctionDeclaration(
         name="list_gce_reservations",
         description="Read-only: Lists live Google Cloud Compute Engine (GCE) reservations in the specified project and optional zone.",
@@ -341,11 +355,16 @@ def run_agent_turn(
     user_message: str,
     session_id: str = "default",
     user_email: Optional[str] = None,
+    project_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Runs a full agent turn (including multi-step tool calls) and returns the response and telemetry."""
     client = get_genai_client()
     normalized_caller = normalize_user_email(user_email)
-    system_instruction = load_system_instruction(caller_email=normalized_caller)
+    selected_project = (project_id or DEFAULT_PROJECT_ID).strip()
+    system_instruction = load_system_instruction(
+        caller_email=normalized_caller,
+        active_project_id=selected_project,
+    )
 
     history = SESSION_HISTORIES.setdefault(session_id, [])
     history.append(
@@ -353,7 +372,10 @@ def run_agent_turn(
             role="user",
             parts=[
                 types.Part.from_text(
-                    text=f"[Caller Identity: {normalized_caller or 'unauthenticated'}]\n{user_message}"
+                    text=(
+                        f"[Caller Identity: {normalized_caller or 'unauthenticated'} | "
+                        f"Selected Project: {selected_project}]\n{user_message}"
+                    )
                 )
             ],
         )
@@ -453,6 +475,8 @@ def _dispatch_tool(
     user_email: Optional[str] = None,
 ) -> Dict[str, Any]:
     try:
+        if fn_name == "list_authorized_projects":
+            return list_authorized_projects()
         if fn_name == "list_gce_reservations":
             return list_gce_reservations(**fn_args)
         if fn_name == "describe_gce_reservation":

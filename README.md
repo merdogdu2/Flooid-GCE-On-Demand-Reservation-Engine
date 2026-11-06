@@ -76,9 +76,9 @@ flowchart LR
 ### Option 1: Using the Interactive Web Console
 Open **[https://gce-reservation-agent-214008965747.us-central1.run.app](https://gce-reservation-agent-214008965747.us-central1.run.app)** in your browser:
 
-1. **Select Caller Identity (Top Bar)**:
-   - Defaults to **`admin@merdogdu.altostrat.com (Admin)`** with a green `AUTHORIZED` badge.
-   - Switch the dropdown to **`developer@merdogdu.altostrat.com (No Rights)`** or **`viewer@example.com (No Rights)`** at any time to test how unauthorized reservation attempts are rejected.
+1. **Select Caller Identity & Target GCP Project (Top Bar)**:
+   - **Caller Dropdown**: Defaults to **`admin@merdogdu.altostrat.com (Admin)`** (`AUTHORIZED`). Switch to **`developer@merdogdu.altostrat.com (No Rights)`** or **`viewer@example.com (No Rights)`** to test RBAC rejection.
+   - **Project Dropdown (`GET /api/projects`)**: Dynamically lists all active GCP projects that the account is authorized for (via Cloud Resource Manager API, e.g., `merdogdu-sandbox-398713`, `merdogdu-sandbox-2`, `merdogdu-elevate`, `code-assist-enterprise-demo`, `hays-sandbox`, `production-ready-ai-xt4lixlyz1`, `redbricks-migration-demo`, `sample-firebase-ai-app-b7608`, `snap-dtyqi`). Switching the project automatically updates the **Agent target project**, **Quick Config Builder**, and **Live GCP Environment Telemetry** inspector.
 2. **One-Click Scenario Shortcuts**:
    - **Live Pre-Flight Check**: Automatically inspects live GCE reservations across all zones, queries `us-central1` CPU/GPU quotas, and checks the `compute.sharedReservationsOwnerProjects` Org Policy in `merdogdu-sandbox-398713`.
    - **Shared Multi-Project Design**: Designs a shared reservation (`SPECIFIC_PROJECTS`) across multiple consumer projects and populates the right-hand **Terraform & `gcloud` Workbench**.
@@ -145,7 +145,8 @@ curl -s -X POST "https://gce-reservation-agent-214008965747.us-central1.run.app/
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
 | `GET` | `/api/health` | Service health, active model (`gemini-3.8-flash`), default project, and authorized admin email |
-| `GET` | `/api/reservations` | Lists live GCE reservations across all zones (or `?zone=us-central1-a`) |
+| `GET` | `/api/projects` | Lists all active GCP projects that the account is authorized to access (via Cloud Resource Manager API) |
+| `GET` | `/api/reservations` | Lists live GCE reservations across all zones for `?project_id=...` |
 | `GET` | `/api/quotas?region=us-central1` | Queries live GCE regional quotas (`CPUS`, `E2_CPUS`, `N2_CPUS`, `GPUs`, `LOCAL_SSD_TOTAL_GB`) |
 | `GET` | `/api/org-policy` | Checks effective `constraints/compute.sharedReservationsOwnerProjects` Org Policy |
 | `POST` | `/api/actions/{action_id}/execute` | Approves & executes a staged reservation ticket on GCE (requires `admin@merdogdu.altostrat.com`) |

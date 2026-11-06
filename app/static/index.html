@@ -110,10 +110,12 @@
         </select>
         <span id="user-auth-badge" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">AUTHORIZED</span>
       </div>
-      <div class="hidden xl:flex items-center gap-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg text-xs">
+      <div class="flex items-center gap-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg text-xs">
         <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
         <span class="text-slate-400">Project:</span>
-        <span id="active-project-badge" class="font-mono text-slate-200 font-medium">merdogdu-sandbox-398713</span>
+        <select id="active-project-select" onchange="handleProjectSwitch()" class="bg-transparent font-mono text-slate-200 font-medium focus:outline-none cursor-pointer">
+          <option value="merdogdu-sandbox-398713" class="bg-slate-900 text-slate-200">merdogdu-sandbox-398713</option>
+        </select>
       </div>
       <div class="hidden md:flex items-center gap-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg text-xs">
         <span class="text-slate-400">Model:</span>
@@ -134,23 +136,23 @@
       <!-- Quick Scenario Bar -->
       <div class="px-4 py-2.5 border-b border-slate-800/80 bg-slate-950/50 flex items-center gap-2 overflow-x-auto shrink-0">
         <span class="text-[11px] uppercase tracking-wider font-semibold text-slate-500 shrink-0">Scenarios:</span>
-        <button onclick="sendQuickPrompt('Inspect live GCE reservations, us-central1 CPU quotas, and the sharedReservationsOwnerProjects org policy in merdogdu-sandbox-398713.')"
+        <button onclick="sendQuickPrompt(`Inspect live GCE reservations, us-central1 CPU quotas, and the sharedReservationsOwnerProjects org policy in ${getSelectedProject()}.`)"
           class="text-xs px-2.5 py-1 rounded-md bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 shrink-0 transition">
           Live Pre-Flight Check
         </button>
-        <button onclick="sendQuickPrompt('Design a shared reservation named shared-n2-pool-01 in merdogdu-sandbox-398713 (zone us-central1-a) for 24x n2-standard-8 VMs with specific reservation required, shared with consumer projects flooid-app-prod-01 and flooid-app-prod-02.')"
+        <button onclick="sendQuickPrompt(`Design a shared reservation named shared-n2-pool-01 in ${getSelectedProject()} (zone us-central1-a) for 24x n2-standard-8 VMs with specific reservation required, shared with consumer projects merdogdu-sandbox-2 and merdogdu-elevate.`)"
           class="text-xs px-2.5 py-1 rounded-md bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 shrink-0 transition">
           Shared Multi-Project Design
         </button>
-        <button onclick="sendQuickPrompt('Can I create a shared reservation for 10x f1-micro VMs in us-central1-a and include merdogdu-sandbox-398713 in --share-with? Validate this design.')"
+        <button onclick="sendQuickPrompt(`Can I create a shared reservation for 10x f1-micro VMs in us-central1-a and include ${getSelectedProject()} in --share-with? Validate this design.`)"
           class="text-xs px-2.5 py-1 rounded-md bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0 transition">
           Test Validation Guardrails
         </button>
-        <button onclick="setCallerAndPrompt('admin@merdogdu.altostrat.com', 'Stage a LOCAL specific reservation named sandbox-e2-micro-test in merdogdu-sandbox-398713, zone us-central1-a, machine type e2-micro, vm_count 1 for my approval.')"
+        <button onclick="setCallerAndPrompt('admin@merdogdu.altostrat.com', `Stage a LOCAL specific reservation named sandbox-e2-micro-test in ${getSelectedProject()}, zone us-central1-a, machine type e2-micro, vm_count 1 for my approval.`)"
           class="text-xs px-2.5 py-1 rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0 transition">
           Stage Reservation (Admin)
         </button>
-        <button onclick="setCallerAndPrompt('developer@merdogdu.altostrat.com', 'Create a reservation named unauthorized-res-01 in merdogdu-sandbox-398713, zone us-central1-a, machine type e2-standard-2, vm_count 2.')"
+        <button onclick="setCallerAndPrompt('developer@merdogdu.altostrat.com', `Create a reservation named unauthorized-res-01 in ${getSelectedProject()}, zone us-central1-a, machine type e2-standard-2, vm_count 2.`)"
           class="text-xs px-2.5 py-1 rounded-md bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0 transition">
           Test Unauthorized User (No Rights)
         </button>
@@ -327,7 +329,7 @@
         <div class="flex items-center justify-between">
           <div>
             <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Live GCE Telemetry</h3>
-            <p class="text-[11px] text-slate-500">Read-only inspection of <code class="text-slate-300">merdogdu-sandbox-398713</code></p>
+            <p class="text-[11px] text-slate-500">Read-only inspection of <code id="live-env-project-label" class="text-slate-300">merdogdu-sandbox-398713</code></p>
           </div>
           <button onclick="refreshLiveEnvironment()" class="text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
             Refresh Live Data
@@ -390,6 +392,23 @@
     function getCallerEmail() {
       const sel = document.getElementById('caller-email-select');
       return sel ? sel.value : 'admin@merdogdu.altostrat.com';
+    }
+
+    function getSelectedProject() {
+      const sel = document.getElementById('active-project-select');
+      return sel ? sel.value : 'merdogdu-sandbox-398713';
+    }
+
+    function handleProjectSwitch() {
+      const proj = getSelectedProject();
+      const vProj = document.getElementById('v-project');
+      if (vProj) vProj.value = proj;
+      const liveLabel = document.getElementById('live-env-project-label');
+      if (liveLabel) liveLabel.innerText = proj;
+      const liveTab = document.getElementById('tab-live');
+      if (liveTab && !liveTab.classList.contains('hidden')) {
+        refreshLiveEnvironment();
+      }
     }
 
     function handleUserSwitch() {
@@ -623,6 +642,7 @@
 
       try {
         const callerEmail = getCallerEmail();
+        const selectedProject = getSelectedProject();
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: {
@@ -633,6 +653,7 @@
             message,
             session_id: sessionId,
             user_email: callerEmail,
+            project_id: selectedProject,
           }),
         });
         const data = await res.json();
@@ -686,15 +707,19 @@
     }
 
     async function refreshLiveEnvironment() {
+      const projectId = getSelectedProject();
+      const liveLabel = document.getElementById('live-env-project-label');
+      if (liveLabel) liveLabel.innerText = projectId;
+
       // 1. Reservations
       const resContainer = document.getElementById('live-reservations-list');
       const countBadge = document.getElementById('live-res-count');
       try {
-        const r = await fetch('/api/reservations');
+        const r = await fetch(`/api/reservations?project_id=${encodeURIComponent(projectId)}`);
         const data = await r.json();
         countBadge.innerText = `${data.count || 0} reservation(s)`;
         if (!data.reservations || data.reservations.length === 0) {
-          resContainer.innerHTML = `<div class="text-slate-500 italic">No active GCE reservations in ${data.project_id}.</div>`;
+          resContainer.innerHTML = `<div class="text-slate-500 italic">No active GCE reservations in ${data.project_id || projectId}.</div>`;
         } else {
           resContainer.innerHTML = data.reservations.map(item => `
             <div class="p-2.5 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between">
@@ -716,7 +741,7 @@
       // 2. Org Policy
       const orgDiv = document.getElementById('live-org-policy');
       try {
-        const r = await fetch('/api/org-policy');
+        const r = await fetch(`/api/org-policy?project_id=${encodeURIComponent(projectId)}`);
         const data = await r.json();
         orgDiv.innerHTML = `<pre class="p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-[11px] text-slate-300 overflow-x-auto">${JSON.stringify(data, null, 2)}</pre>`;
       } catch (e) {
@@ -728,11 +753,12 @@
     }
 
     async function loadQuotas() {
+      const projectId = getSelectedProject();
       const region = document.getElementById('quota-region-input').value.trim() || 'us-central1';
       const qDiv = document.getElementById('live-quotas-table');
-      qDiv.innerText = `Querying ${region} quotas...`;
+      qDiv.innerText = `Querying ${region} quotas in ${projectId}...`;
       try {
-        const r = await fetch(`/api/quotas?region=${encodeURIComponent(region)}`);
+        const r = await fetch(`/api/quotas?region=${encodeURIComponent(region)}&project_id=${encodeURIComponent(projectId)}`);
         const data = await r.json();
         if (data.status !== 'success') {
           qDiv.innerHTML = `<div class="text-rose-400">${data.error || 'Error loading quotas'}</div>`;
@@ -767,11 +793,25 @@
 
     async function initApp() {
       try {
-        const r = await fetch('/api/spec');
-        const spec = await r.json();
-        document.getElementById('active-project-badge').innerText = spec.default_project_id;
+        const [specRes, projRes] = await Promise.all([
+          fetch('/api/spec'),
+          fetch('/api/projects'),
+        ]);
+        const spec = await specRes.json();
+        const projData = await projRes.json();
+
         document.getElementById('active-model-badge').innerText = spec.model;
         document.getElementById('spec-markdown-view').innerText = spec.markdown;
+
+        const projSelect = document.getElementById('active-project-select');
+        if (projSelect && projData.projects && projData.projects.length > 0) {
+          projSelect.innerHTML = projData.projects.map(p => {
+            const label = p.name && p.name !== p.project_id ? `${p.project_id} (${p.name})` : p.project_id;
+            const selected = p.project_id === spec.default_project_id ? 'selected' : '';
+            return `<option value="${p.project_id}" ${selected} class="bg-slate-900 text-slate-200">${label}</option>`;
+          }).join('');
+          handleProjectSwitch();
+        }
       } catch (e) {
         console.error(e);
       }

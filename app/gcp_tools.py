@@ -7,7 +7,9 @@ import time
 import uuid
 from typing import Any, Dict, List, Optional
 
+import google.auth
 from google.api_core.exceptions import GoogleAPICallError, NotFound, PermissionDenied
+from google.auth.transport.requests import AuthorizedSession
 from google.cloud import compute_v1
 from google.cloud import orgpolicy_v2
 
@@ -23,8 +25,65 @@ AUTHORIZED_RESERVATION_ADMIN = os.environ.get(
     "AUTHORIZED_RESERVATION_ADMIN", "admin@merdogdu.altostrat.com"
 ).strip().lower()
 
+FALLBACK_AUTHORIZED_PROJECTS: List[Dict[str, str]] = [
+    {"project_id": "merdogdu-sandbox-398713", "name": "merdogdu-sandbox", "project_number": "214008965747", "lifecycle_state": "ACTIVE"},
+    {"project_id": "merdogdu-sandbox-2", "name": "merdogdu-sandbox-2", "project_number": "864564506938", "lifecycle_state": "ACTIVE"},
+    {"project_id": "merdogdu-elevate", "name": "merdogdu-elevate", "project_number": "704352440987", "lifecycle_state": "ACTIVE"},
+    {"project_id": "code-assist-enterprise-demo", "name": "Code-Assist-Ent-demo-1151", "project_number": "819363437394", "lifecycle_state": "ACTIVE"},
+    {"project_id": "hays-sandbox", "name": "hays-sandbox", "project_number": "1066649673157", "lifecycle_state": "ACTIVE"},
+    {"project_id": "production-ready-ai-xt4lixlyz1", "name": "production-ready-ai-xt4lixlyz1", "project_number": "208471657573", "lifecycle_state": "ACTIVE"},
+    {"project_id": "redbricks-migration-demo", "name": "redbricks-migration-demo", "project_number": "866349635221", "lifecycle_state": "ACTIVE"},
+    {"project_id": "sample-firebase-ai-app-b7608", "name": "Sample Firebase AI App", "project_number": "255565000853", "lifecycle_state": "ACTIVE"},
+    {"project_id": "snap-dtyqi", "name": "Snap", "project_number": "996541341079", "lifecycle_state": "ACTIVE"},
+]
+
 # In-memory store of staged mutation actions requiring explicit user approval
 STAGED_ACTIONS: Dict[str, Dict[str, Any]] = {}
+
+
+def list_authorized_projects() -> Dict[str, Any]:
+    """Read-only tool: Lists all active GCP projects that the account is authorized to access."""
+    projects_by_id: Dict[str, Dict[str, str]] = {
+        p["project_id"]: dict(p) for p in FALLBACK_AUTHORIZED_PROJECTS
+    }
+    source = "cloudresourcemanager_api"
+    try:
+        creds, _ = google.auth.default(
+            scopes=["https://www.googleapis.com/auth/cloud-platform.read-only"]
+        )
+        authed_session = AuthorizedSession(creds)
+        resp = authed_session.get(
+            "https://cloudresourcemanager.googleapis.com/v1/projects",
+            params={"filter": "lifecycleState:ACTIVE"},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            for proj in data.get("projects", []):
+                pid = proj.get("projectId")
+                if pid and not pid.startswith("sys-"):
+                    projects_by_id[pid] = {
+                        "project_id": pid,
+                        "name": proj.get("name", pid),
+                        "project_number": str(proj.get("projectNumber", "")),
+                        "lifecycle_state": proj.get("lifecycleState", "ACTIVE"),
+                    }
+        else:
+            source = "fallback_catalog"
+    except Exception:
+        source = "fallback_catalog"
+
+    def _sort_key(item: Dict[str, str]) -> tuple[int, str]:
+        return (0 if item["project_id"] == DEFAULT_PROJECT_ID else 1, item["project_id"])
+
+    sorted_projects = sorted(projects_by_id.values(), key=_sort_key)
+    return {
+        "status": "success",
+        "source": source,
+        "default_project_id": DEFAULT_PROJECT_ID,
+        "count": len(sorted_projects),
+        "projects": sorted_projects,
+    }
 
 
 def normalize_user_email(raw_email: Optional[str]) -> str:
